@@ -195,28 +195,23 @@ require(gridExtra)
 
 #### Semivariogram function ####
 
-# semivariogram function. Needs an object of class "data.frame" with $X, $Y and $var variables (it also runs with a spdf)
-.semvar <- function(data, treshold=3, Method='All', nh=20) {
-    if (class(data) == 'SpatialPointsDataFrame') {data = data.frame(X=data@coords[,1], Y=data@coords[,2], var=data@data[,1])}
-    # Cumulatives of pairing loop
-    pitag <- c()
-    sqdif <- c()
-    # Pairing loop
-    for (i in 1:nrow(data)) {
-	    for (j in 1:nrow(data)) {
-		    if (j > i) {
-                # Pythagoras' theorem
-			    pitag <- append(pitag, sqrt(((data[i, ]$X - data[j, ]$X)^2) + ((data[i, ]$Y - data[j, ]$Y)^2)))
-                # Square of differences
-			    sqdif <- append(sqdif, (data[i, ]$var - data[j, ]$var)^2)
-		    }
-    	}
-    }
+# semivariogram function. Needs an object of SpatialPointsDataFrame
+.semvar <- function(spdf, dimension=1, treshold=3, Method='All', nh=20) {
+    ### pairing
+    # create the distance vector
+    distMat <- unname(as.matrix(dist(spdf@coords))) # dist function
+    distMat[upper.tri(distMat, diag=T)] <- NA
+    distVec <- na.omit(as.numeric(distMat))
+    # create de square diferences
+    vals <- as.matrix(spdf@data[,dimension]) # extract values
+    difMat <- outer(1:nrow(vals),1:nrow(vals), FUN = Vectorize(function(i, j) (vals[i,] - vals[j,])^2))
+    difMat[upper.tri(difMat, diag=T)] <- NA
+    difVec <- na.omit(as.numeric(difMat))
     # Build data.frame and order by distance
-    pairs <- data.frame(pitag = pitag, sqdif = sqdif)
-    pairs <- pairs[order(pairs$pitag), ]
+    pairs <- data.frame(pitag = distVec, sqdif = difVec)
+    pairs <- pairs[order(pairs$pitag),]
     # Calculate the relevant distance and subsample the pairs
-    relevDist <- sqrt((max(data$X) - min(data$X))^2 + (max(data$Y) - min(data$Y))^2) / treshold
+    relevDist <- sqrt((max(spdf@coords[,1]) - min(spdf@coords[,1]))^2 + (max(spdf@coords[,2]) - min(spdf@coords[,2]))^2) / treshold
     pairs <- pairs[which(pairs$pitag < relevDist),]
     # Split classes by distances
     if (Method == 'All') {distGroup <- split(pairs, pairs$pitag)} else
